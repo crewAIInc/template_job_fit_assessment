@@ -207,15 +207,11 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
 
     @listen(write_report)
     def save_report(self):
-        """Step 4: Write the markdown report to disk."""
-        safe_company = self.state._company_name.replace(" ", "_").replace("/", "-")
-        filename = f"job_fit_report_{safe_company}.md"
-        with open(filename, "w") as f:
-            f.write(self.state._report)
-        print(f"Report saved to {filename}")
-
+        """Step 4: Return the markdown report to the caller."""
         if self.state._resume_temp_path:
             os.unlink(self.state._resume_temp_path)
+
+        return self.state._report
 
 
 # ---------------------------------------------------------------------------
