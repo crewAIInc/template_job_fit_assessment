@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Fit Assessment</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">crew<span>ai</span></div>
+    <h2>Job Fit Assessment</h2>
+    <p class="sidebar-desc">
+      Evaluate candidate-job fit powered by AI agents.
+    </p>
+    <h3>How it works:</h3>
+    <ol>
+      <li>
+        <strong>Paste a job posting URL</strong> &mdash; An AI agent scrapes the
+        posting and extracts required skills.
+      </li>
+      <li>
+        <strong>Upload a resume</strong> &mdash; A second agent reads the PDF
+        and scores the candidate against the requirements.
+      </li>
+      <li>
+        <strong>Get your report</strong> &mdash; A third agent compiles a
+        structured fit assessment with strengths, gaps, and an overall score.
+      </li>
+    </ol>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <!-- STATE 1: Form -->
+    <section id="state-form">
+      <h1>Job Fit Assessment</h1>
+
+      <div class="two-col">
+        <div class="col-left">
+          <h2>Step 1: Submit Details</h2>
+          <p>
+            Paste the URL to a job posting and upload the candidate's resume as
+            a PDF. Our AI agents will analyze the posting, evaluate the resume,
+            and produce a detailed fit report.
+          </p>
+          <p>
+            The assessment typically takes 1&ndash;3 minutes depending on the
+            complexity of the role.
+          </p>
+        </div>
+
+        <div class="col-right">
+          <h2>Assessment Details</h2>
+          <form id="assessment-form">
+            <label for="job_posting_url">Job Posting URL *</label>
+            <input
+              type="url"
+              id="job_posting_url"
+              name="job_posting_url"
+              placeholder="https://company.com/careers/role"
+              required
+            />
+
+            <label for="resume">Resume (PDF) *</label>
+            <div class="file-upload" id="file-upload-area">
+              <input type="file" id="resume" name="resume" accept=".pdf" required />
+              <p class="file-upload-text">
+                <span id="file-name">Click or drag a PDF here</span>
+              </p>
+            </div>
+
+            <button type="submit" class="btn-submit">Assess Candidate</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATE 2: Processing -->
+    <section id="state-processing" class="hidden">
+      <div class="processing-container">
+        <div class="spinner"></div>
+        <h2>Analyzing...</h2>
+        <p>Our AI agents are working on the assessment. This may take a few minutes.</p>
+        <div class="progress-steps">
+          <div class="step active" id="step-scraping">Extracting job requirements</div>
+          <div class="step" id="step-resume">Analyzing resume</div>
+          <div class="step" id="step-report">Writing report</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STATE 3: Report -->
+    <section id="state-report" class="hidden">
+      <div id="report-content" class="report-content"></div>
+      <button class="btn-submit btn-new" onclick="resetForm()">Start New Assessment</button>
+    </section>
+
+    <!-- Error display -->
+    <section id="state-error" class="hidden">
+      <div class="error-container">
+        <h2>Something went wrong</h2>
+        <p id="error-message"></p>
+        <button class="btn-submit btn-new" onclick="resetForm()">Try Again</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("assessment-form");
+    const stateForm = document.getElementById("state-form");
+    const stateProcessing = document.getElementById("state-processing");
+    const stateReport = document.getElementById("state-report");
+    const stateError = document.getElementById("state-error");
+    const reportContent = document.getElementById("report-content");
+    const errorMessage = document.getElementById("error-message");
+    const fileInput = document.getElementById("resume");
+    const fileName = document.getElementById("file-name");
+
+    let pollInterval = null;
+
+    // Show selected file name
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        fileName.textContent = fileInput.files[0].name;
+      } else {
+        fileName.textContent = "Click or drag a PDF here";
+      }
+    });
+
+    function showState(state) {
+      stateForm.classList.add("hidden");
+      stateProcessing.classList.add("hidden");
+      stateReport.classList.add("hidden");
+      stateError.classList.add("hidden");
+      state.classList.remove("hidden");
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      showState(stateError);
+    }
+
+    function resetForm() {
+      if (pollInterval) clearInterval(pollInterval);
+      form.reset();
+      fileName.textContent = "Click or drag a PDF here";
+      showState(stateForm);
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      showState(stateProcessing);
+
+      const formData = new FormData(form);
+
+      try {
+        const resp = await fetch("/api/kickoff", { method: "POST", body: formData });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          showError(data.error || "Failed to start the assessment.");
+          return;
+        }
+
+        const kickoffId = data.kickoff_id;
+        if (!kickoffId) {
+          showError("No kickoff ID returned. Check your API configuration.");
+          return;
+        }
+
+        startPolling(kickoffId);
+      } catch (err) {
+        showError("Network error: " + err.message);
+      }
+    });
+
+    function startPolling(kickoffId) {
+      let elapsed = 0;
+
+      pollInterval = setInterval(async () => {
+        elapsed += 5;
+
+        // Animate progress steps based on elapsed time
+        if (elapsed >= 10) document.getElementById("step-scraping").classList.add("done");
+        if (elapsed >= 20) {
+          document.getElementById("step-resume").classList.add("active");
+        }
+        if (elapsed >= 40) {
+          document.getElementById("step-resume").classList.add("done");
+          document.getElementById("step-report").classList.add("active");
+        }
+
+        try {
+          const resp = await fetch(`/api/status/${kickoffId}`);
+          const data = await resp.json();
+          const status = (data.state || data.status || "").toUpperCase();
+
+          if (status === "SUCCESS" || status === "COMPLETED") {
+            clearInterval(pollInterval);
+            const result = data.result || data.output || data.raw || "";
+            reportContent.innerHTML = marked.parse(result);
+            showState(stateReport);
+          } else if (status === "FAILED" || status === "ERROR") {
+            clearInterval(pollInterval);
+            showError(data.error || data.message || "The assessment failed. Please try again.");
+          }
+          // Otherwise keep polling (RUNNING, PENDING, etc.)
+        } catch (err) {
+          // Network hiccup — keep trying
+          console.warn("Polling error:", err);
+        }
+      }, 5000);
+    }
+  </script>
+</body>
+</html>
