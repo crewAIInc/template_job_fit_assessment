@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+
+# uv
+.python-version
+
+# Unused directories
+crews/
+
+# Project outputs
+job_fit_report_*.md
+*.pdf
+
+# CrewAI reference docs
+CLAUDE.md
+
+# Temp files
+tmp/
+*.tmp

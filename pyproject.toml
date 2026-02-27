@@ -1,0 +1,23 @@
+[project]
+name = "template_job_fit_assessment"
+version = "0.1.0"
+description = "template_job_fit_assessment using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "crewai[google-genai,tools]==1.9.3",
+    "firecrawl-py>=1.0.0",
+]
+
+[project.scripts]
+kickoff = "template_job_fit_assessment.main:kickoff"
+run_crew = "template_job_fit_assessment.main:kickoff"
+plot = "template_job_fit_assessment.main:plot"
+run_with_trigger = "template_job_fit_assessment.main:run_with_trigger"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "flow"
