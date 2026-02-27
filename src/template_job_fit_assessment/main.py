@@ -1,12 +1,15 @@
 #!/usr/bin/env python
+import base64
 import json
+import os
 import sys
+import tempfile
 from typing import List
 
 from crewai import Agent
 from crewai.flow import Flow, listen, start
 from crewai_tools import FirecrawlScrapeWebsiteTool, PDFSearchTool
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 # ---------------------------------------------------------------------------
 # Pydantic models for structured agent outputs
@@ -32,20 +35,20 @@ class ResumeAnalysisData(BaseModel):
 
 
 class JobFitState(BaseModel):
-    # Inputs
+    # User inputs — the only fields exposed to CrewAI AMP
     job_posting_url: str = ""
-    resume_path: str = ""
-    # From extract_job_details
-    job_title: str = ""
-    company_name: str = ""
-    required_skills: List[str] = []
-    # From analyze_resume
-    candidate_name: str = ""
-    fitness_score: int = 0
-    strengths: List[str] = []
-    missing_skills: List[str] = []
-    # From write_report
-    report: str = ""
+    resume_base64: str = ""
+
+    # Internal state — populated during flow execution, not exposed as inputs
+    _resume_temp_path: str = PrivateAttr(default="")
+    _job_title: str = PrivateAttr(default="")
+    _company_name: str = PrivateAttr(default="")
+    _required_skills: List[str] = PrivateAttr(default_factory=list)
+    _candidate_name: str = PrivateAttr(default="")
+    _fitness_score: int = PrivateAttr(default=0)
+    _strengths: List[str] = PrivateAttr(default_factory=list)
+    _missing_skills: List[str] = PrivateAttr(default_factory=list)
+    _report: str = PrivateAttr(default="")
 
 
 # ---------------------------------------------------------------------------
@@ -93,11 +96,21 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
         )
 
         job_data: JobPostingData = result.pydantic
-        self.state.job_title = job_data.job_title
-        self.state.company_name = job_data.company_name
-        self.state.required_skills = job_data.required_skills
+        self.state._job_title = job_data.job_title
+        self.state._company_name = job_data.company_name
+        self.state._required_skills = job_data.required_skills
 
     @listen(extract_job_details)
+    def prepare_resume(self):
+        """Step 2: Decode the base64 resume and write it to a local temp file."""
+        pdf_bytes = base64.b64decode(self.state.resume_base64)
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+        tmp.write(pdf_bytes)
+        tmp.close()
+        self.state._resume_temp_path = tmp.name
+
+    @listen(prepare_resume)
     def analyze_resume(self):
         """Step 2: Read the resume PDF and score the candidate against job requirements."""
         agent = Agent(
@@ -117,11 +130,11 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             verbose=True,
         )
 
-        skills_list = "\n".join(f"- {skill}" for skill in self.state.required_skills)
+        skills_list = "\n".join(f"- {skill}" for skill in self.state._required_skills)
 
         result = agent.kickoff(
-            f"Read the candidate's resume at: {self.state.resume_path}\n\n"
-            f"You are evaluating them for the role of {self.state.job_title} at {self.state.company_name}.\n\n"
+            f"Read the candidate's resume at: {self.state._resume_temp_path}\n\n"
+            f"You are evaluating them for the role of {self.state._job_title} at {self.state._company_name}.\n\n"
             f"Required skills for this role:\n{skills_list}\n\n"
             "Perform the following analysis:\n"
             "1. Extract the candidate's full name\n"
@@ -137,10 +150,10 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
         )
 
         analysis: ResumeAnalysisData = result.pydantic
-        self.state.candidate_name = analysis.candidate_name
-        self.state.fitness_score = analysis.fitness_score
-        self.state.strengths = analysis.strengths
-        self.state.missing_skills = analysis.missing_skills
+        self.state._candidate_name = analysis.candidate_name
+        self.state._fitness_score = analysis.fitness_score
+        self.state._strengths = analysis.strengths
+        self.state._missing_skills = analysis.missing_skills
 
     @listen(analyze_resume)
     def write_report(self):
@@ -160,15 +173,15 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             verbose=True,
         )
 
-        strengths_list = "\n".join(f"- {s}" for s in self.state.strengths)
-        missing_list = "\n".join(f"- {s}" for s in self.state.missing_skills)
-        required_list = "\n".join(f"- {s}" for s in self.state.required_skills)
+        strengths_list = "\n".join(f"- {s}" for s in self.state._strengths)
+        missing_list = "\n".join(f"- {s}" for s in self.state._missing_skills)
+        required_list = "\n".join(f"- {s}" for s in self.state._required_skills)
 
         result = agent.kickoff(
             "Write a professional job fit assessment report in markdown using the data below.\n\n"
-            f"Position: {self.state.job_title} at {self.state.company_name}\n"
-            f"Candidate: {self.state.candidate_name}\n"
-            f"Fitness Score: {self.state.fitness_score}/100\n\n"
+            f"Position: {self.state._job_title} at {self.state._company_name}\n"
+            f"Candidate: {self.state._candidate_name}\n"
+            f"Fitness Score: {self.state._fitness_score}/100\n\n"
             f"Required Skills:\n{required_list}\n\n"
             f"Strengths (matched skills):\n{strengths_list}\n\n"
             f"Missing Skills (gaps):\n{missing_list}\n\n"
@@ -190,16 +203,19 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             "[2-3 sentence overall assessment of the candidate's fit for this role]"
         )
 
-        self.state.report = result.raw
+        self.state._report = result.raw
 
     @listen(write_report)
     def save_report(self):
         """Step 4: Write the markdown report to disk."""
-        safe_company = self.state.company_name.replace(" ", "_").replace("/", "-")
+        safe_company = self.state._company_name.replace(" ", "_").replace("/", "-")
         filename = f"job_fit_report_{safe_company}.md"
         with open(filename, "w") as f:
-            f.write(self.state.report)
+            f.write(self.state._report)
         print(f"Report saved to {filename}")
+
+        if self.state._resume_temp_path:
+            os.unlink(self.state._resume_temp_path)
 
 
 # ---------------------------------------------------------------------------
@@ -211,8 +227,8 @@ def kickoff():
     flow = JobFitAssessmentFlow()
     flow.kickoff(
         inputs={
-            "job_posting_url": "https://openai.com/careers/solutions-engineer-pre-sales-san-francisco/",
-            "resume_path": "resume.pdf",
+            "job_posting_url": "",
+            "resume_base64": "",
         }
     )
 
