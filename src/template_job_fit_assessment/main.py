@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 import base64
-import json
 import os
-import sys
 import tempfile
 from typing import List
 
 from crewai import Agent
 from crewai.flow import Flow, listen, start
 from crewai_tools import FirecrawlScrapeWebsiteTool, PDFSearchTool
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
 # Pydantic models for structured agent outputs
@@ -35,20 +33,8 @@ class ResumeAnalysisData(BaseModel):
 
 
 class JobFitState(BaseModel):
-    # User inputs — the only fields exposed to CrewAI AMP
     job_posting_url: str = ""
     resume_base64: str = ""
-
-    # Internal state — populated during flow execution, not exposed as inputs
-    _resume_temp_path: str = PrivateAttr(default="")
-    _job_title: str = PrivateAttr(default="")
-    _company_name: str = PrivateAttr(default="")
-    _required_skills: List[str] = PrivateAttr(default_factory=list)
-    _candidate_name: str = PrivateAttr(default="")
-    _fitness_score: int = PrivateAttr(default=0)
-    _strengths: List[str] = PrivateAttr(default_factory=list)
-    _missing_skills: List[str] = PrivateAttr(default_factory=list)
-    _report: str = PrivateAttr(default="")
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +50,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             self.state.job_posting_url = crewai_trigger_payload.get(
                 "job_posting_url", ""
             )
-            self.state.resume_path = crewai_trigger_payload.get("resume_path", "")
+            self.state.resume_base64 = crewai_trigger_payload.get("resume_base64", "")
 
         agent = Agent(
             role="Skill Extraction Specialist",
@@ -95,24 +81,16 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             response_format=JobPostingData,
         )
 
-        job_data: JobPostingData = result.pydantic
-        self.state._job_title = job_data.job_title
-        self.state._company_name = job_data.company_name
-        self.state._required_skills = job_data.required_skills
+        return result.pydantic
 
     @listen(extract_job_details)
-    def prepare_resume(self):
-        """Step 2: Decode the base64 resume and write it to a local temp file."""
+    def analyze_resume(self, job_data: JobPostingData):
+        """Step 2: Decode resume, read it, and score against job requirements."""
         pdf_bytes = base64.b64decode(self.state.resume_base64)
-
         tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
         tmp.write(pdf_bytes)
         tmp.close()
-        self.state._resume_temp_path = tmp.name
 
-    @listen(prepare_resume)
-    def analyze_resume(self):
-        """Step 2: Read the resume PDF and score the candidate against job requirements."""
         agent = Agent(
             role="Resume Analyzer",
             goal=(
@@ -130,11 +108,11 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             verbose=True,
         )
 
-        skills_list = "\n".join(f"- {skill}" for skill in self.state._required_skills)
+        skills_list = "\n".join(f"- {skill}" for skill in job_data.required_skills)
 
         result = agent.kickoff(
-            f"Read the candidate's resume at: {self.state._resume_temp_path}\n\n"
-            f"You are evaluating them for the role of {self.state._job_title} at {self.state._company_name}.\n\n"
+            f"Read the candidate's resume at: {tmp.name}\n\n"
+            f"You are evaluating them for the role of {job_data.job_title} at {job_data.company_name}.\n\n"
             f"Required skills for this role:\n{skills_list}\n\n"
             "Perform the following analysis:\n"
             "1. Extract the candidate's full name\n"
@@ -149,15 +127,19 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             response_format=ResumeAnalysisData,
         )
 
-        analysis: ResumeAnalysisData = result.pydantic
-        self.state._candidate_name = analysis.candidate_name
-        self.state._fitness_score = analysis.fitness_score
-        self.state._strengths = analysis.strengths
-        self.state._missing_skills = analysis.missing_skills
+        os.unlink(tmp.name)
+
+        return {
+            "job_data": job_data,
+            "analysis": result.pydantic,
+        }
 
     @listen(analyze_resume)
-    def write_report(self):
+    def write_report(self, data: dict):
         """Step 3: Compile the findings into a structured markdown report."""
+        job_data: JobPostingData = data["job_data"]
+        analysis: ResumeAnalysisData = data["analysis"]
+
         agent = Agent(
             role="Report Writer",
             goal=(
@@ -173,15 +155,15 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             verbose=True,
         )
 
-        strengths_list = "\n".join(f"- {s}" for s in self.state._strengths)
-        missing_list = "\n".join(f"- {s}" for s in self.state._missing_skills)
-        required_list = "\n".join(f"- {s}" for s in self.state._required_skills)
+        strengths_list = "\n".join(f"- {s}" for s in analysis.strengths)
+        missing_list = "\n".join(f"- {s}" for s in analysis.missing_skills)
+        required_list = "\n".join(f"- {s}" for s in job_data.required_skills)
 
         result = agent.kickoff(
             "Write a professional job fit assessment report in markdown using the data below.\n\n"
-            f"Position: {self.state._job_title} at {self.state._company_name}\n"
-            f"Candidate: {self.state._candidate_name}\n"
-            f"Fitness Score: {self.state._fitness_score}/100\n\n"
+            f"Position: {job_data.job_title} at {job_data.company_name}\n"
+            f"Candidate: {analysis.candidate_name}\n"
+            f"Fitness Score: {analysis.fitness_score}/100\n\n"
             f"Required Skills:\n{required_list}\n\n"
             f"Strengths (matched skills):\n{strengths_list}\n\n"
             f"Missing Skills (gaps):\n{missing_list}\n\n"
@@ -203,15 +185,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             "[2-3 sentence overall assessment of the candidate's fit for this role]"
         )
 
-        self.state._report = result.raw
-
-    @listen(write_report)
-    def save_report(self):
-        """Step 4: Return the markdown report to the caller."""
-        if self.state._resume_temp_path:
-            os.unlink(self.state._resume_temp_path)
-
-        return self.state._report
+        return result.raw
 
 
 # ---------------------------------------------------------------------------
@@ -232,27 +206,3 @@ def kickoff():
 def plot():
     flow = JobFitAssessmentFlow()
     flow.plot()
-
-
-def run_with_trigger():
-    """Run the flow with a JSON trigger payload from the command line."""
-    if len(sys.argv) < 2:
-        raise Exception(
-            "No trigger payload provided. Please provide JSON payload as argument."
-        )
-
-    try:
-        trigger_payload = json.loads(sys.argv[1])
-    except json.JSONDecodeError:
-        raise Exception("Invalid JSON payload provided as argument")
-
-    flow = JobFitAssessmentFlow()
-    try:
-        result = flow.kickoff({"crewai_trigger_payload": trigger_payload})
-        return result
-    except Exception as e:
-        raise Exception(f"An error occurred while running the flow with trigger: {e}")
-
-
-if __name__ == "__main__":
-    kickoff()

@@ -10,7 +10,7 @@
 <body>
   <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar-logo">crew<span>ai</span></div>
+    <img class="sidebar-logo" src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/crewai-brand-color.png" alt="CrewAI" />
     <h2>Job Fit Assessment</h2>
     <p class="sidebar-desc">
       Evaluate candidate-job fit powered by AI agents.
@@ -38,45 +38,33 @@
     <!-- STATE 1: Form -->
     <section id="state-form">
       <h1>Job Fit Assessment</h1>
+      <p class="intro">
+        Paste the URL to a job posting and upload the candidate's resume as
+        a PDF. Our AI agents will analyze the posting, evaluate the resume,
+        and produce a detailed fit report. The assessment typically takes
+        1&ndash;3 minutes.
+      </p>
 
-      <div class="two-col">
-        <div class="col-left">
-          <h2>Step 1: Submit Details</h2>
-          <p>
-            Paste the URL to a job posting and upload the candidate's resume as
-            a PDF. Our AI agents will analyze the posting, evaluate the resume,
-            and produce a detailed fit report.
-          </p>
-          <p>
-            The assessment typically takes 1&ndash;3 minutes depending on the
-            complexity of the role.
+      <form id="assessment-form" class="form-card">
+        <label for="job_posting_url">Job Posting URL *</label>
+        <input
+          type="url"
+          id="job_posting_url"
+          name="job_posting_url"
+          placeholder="https://company.com/careers/role"
+          required
+        />
+
+        <label for="resume">Resume (PDF) *</label>
+        <div class="file-upload" id="file-upload-area">
+          <input type="file" id="resume" name="resume" accept=".pdf" required />
+          <p class="file-upload-text">
+            <span id="file-name">Click or drag a PDF here</span>
           </p>
         </div>
 
-        <div class="col-right">
-          <h2>Assessment Details</h2>
-          <form id="assessment-form">
-            <label for="job_posting_url">Job Posting URL *</label>
-            <input
-              type="url"
-              id="job_posting_url"
-              name="job_posting_url"
-              placeholder="https://company.com/careers/role"
-              required
-            />
-
-            <label for="resume">Resume (PDF) *</label>
-            <div class="file-upload" id="file-upload-area">
-              <input type="file" id="resume" name="resume" accept=".pdf" required />
-              <p class="file-upload-text">
-                <span id="file-name">Click or drag a PDF here</span>
-              </p>
-            </div>
-
-            <button type="submit" class="btn-submit">Assess Candidate</button>
-          </form>
-        </div>
-      </div>
+        <button type="submit" class="btn-submit">Assess Candidate</button>
+      </form>
     </section>
 
     <!-- STATE 2: Processing -->
@@ -180,18 +168,22 @@
 
     function startPolling(kickoffId) {
       let elapsed = 0;
+      const MAX_POLL_SECONDS = 300;
 
       pollInterval = setInterval(async () => {
         elapsed += 5;
 
-        // Animate progress steps based on elapsed time
         if (elapsed >= 10) document.getElementById("step-scraping").classList.add("done");
-        if (elapsed >= 20) {
-          document.getElementById("step-resume").classList.add("active");
-        }
+        if (elapsed >= 20) document.getElementById("step-resume").classList.add("active");
         if (elapsed >= 40) {
           document.getElementById("step-resume").classList.add("done");
           document.getElementById("step-report").classList.add("active");
+        }
+
+        if (elapsed > MAX_POLL_SECONDS) {
+          clearInterval(pollInterval);
+          showError("The assessment is taking too long. Please try again later.");
+          return;
         }
 
         try {
@@ -208,9 +200,7 @@
             clearInterval(pollInterval);
             showError(data.error || data.message || "The assessment failed. Please try again.");
           }
-          // Otherwise keep polling (RUNNING, PENDING, etc.)
         } catch (err) {
-          // Network hiccup — keep trying
           console.warn("Polling error:", err);
         }
       }, 5000);

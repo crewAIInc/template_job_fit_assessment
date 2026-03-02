@@ -1,7 +1,7 @@
 import base64
 import os
 
-import requests as http_requests
+import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
@@ -37,7 +37,7 @@ def api_kickoff():
 
     resume_b64 = base64.b64encode(resume_file.read()).decode("utf-8")
 
-    resp = http_requests.post(
+    resp = requests.post(
         f"{CREWAI_API_URL}/kickoff",
         headers=_amp_headers(),
         json={
@@ -54,9 +54,9 @@ def api_kickoff():
 
 @app.route("/api/status/<kickoff_id>")
 def api_status(kickoff_id):
-    resp = http_requests.get(
+    resp = requests.get(
         f"{CREWAI_API_URL}/status/{kickoff_id}",
-        headers={"Authorization": f"Bearer {CREWAI_BEARER_TOKEN}"},
+        headers=_amp_headers(),
         timeout=15,
     )
 
