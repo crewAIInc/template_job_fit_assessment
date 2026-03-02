@@ -104,7 +104,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
                 "information — if a skill is not explicitly present in the resume, it is absent."
             ),
             tools=[PDFSearchTool()],
-            llm="openai/gpt-5-nano",
+            llm="openai/gpt-5-mini",
             verbose=True,
         )
 
@@ -151,7 +151,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
                 "documentation. Your reports are concise and actionable. You present facts "
                 "without editorializing and always redact sensitive personal information."
             ),
-            llm="openai/gpt-5-nano",
+            llm="openai/gpt-5.2",
             verbose=True,
         )
 
