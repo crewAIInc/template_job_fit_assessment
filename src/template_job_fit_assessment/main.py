@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 import base64
-import os
-import tempfile
 from typing import List
 
 from crewai import Agent
 from crewai.flow import Flow, listen, start
-from crewai_tools import FirecrawlScrapeWebsiteTool, PDFSearchTool
+import pymupdf
+from crewai_tools import FirecrawlScrapeWebsiteTool
 from pydantic import BaseModel
 
 from template_job_fit_assessment.events.listener import WebhookEventListener
@@ -92,11 +91,13 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
 
     @listen(extract_job_details)
     def analyze_resume(self, job_data: JobPostingData):
-        """Step 2: Decode resume, read it, and score against job requirements."""
+        """Step 2: Decode resume, extract full text, and score against job requirements."""
         pdf_bytes = base64.b64decode(self.state.resume_base64)
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-        tmp.write(pdf_bytes)
-        tmp.close()
+
+        # Extract full text from PDF using PyMuPDF
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+        resume_text = "\n".join(page.get_text() for page in doc)
+        doc.close()
 
         agent = Agent(
             role="Resume Analyzer",
@@ -110,7 +111,6 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
                 "and rigor, matching skills precisely against requirements. You never fabricate "
                 "information — if a skill is not explicitly present in the resume, it is absent."
             ),
-            tools=[PDFSearchTool()],
             llm="openai/gpt-5-mini",
             verbose=True,
         )
@@ -118,12 +118,9 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
         skills_list = "\n".join(f"- {skill}" for skill in job_data.required_skills)
 
         result = agent.kickoff(
-            f"Read the candidate's resume at: {tmp.name}\n\n"
-            f"You are evaluating them for the role of {job_data.job_title} at {job_data.company_name}.\n\n"
+            f"You are evaluating a candidate for the role of {job_data.job_title} at {job_data.company_name}.\n\n"
             f"Required skills for this role:\n{skills_list}\n\n"
-            "IMPORTANT: When using the PDF search tool, you MUST provide a non-empty query string. "
-            "Start by searching for the candidate's name and summary (e.g. query='experience skills summary'), "
-            "then search for specific required skills.\n\n"
+            f"Here is the candidate's full resume:\n\n---\n{resume_text}\n---\n\n"
             "Perform the following analysis:\n"
             "1. Extract the candidate's full name\n"
             "2. Identify which required skills the candidate clearly demonstrates (strengths)\n"
@@ -136,8 +133,6 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             "(no addresses, phone numbers, email addresses, or ID numbers).",
             response_format=ResumeAnalysisData,
         )
-
-        os.unlink(tmp.name)
 
         return {
             "job_data": job_data,
