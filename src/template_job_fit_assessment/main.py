@@ -9,6 +9,11 @@ from crewai.flow import Flow, listen, start
 from crewai_tools import FirecrawlScrapeWebsiteTool, PDFSearchTool
 from pydantic import BaseModel
 
+from template_job_fit_assessment.events.listener import WebhookEventListener
+
+# Register event listener — auto-hooks into flow events and POSTs to WEBHOOK_URL
+_webhook_listener = WebhookEventListener()
+
 # ---------------------------------------------------------------------------
 # Pydantic models for structured agent outputs
 # ---------------------------------------------------------------------------
@@ -33,6 +38,7 @@ class ResumeAnalysisData(BaseModel):
 
 
 class JobFitState(BaseModel):
+    session_id: str = ""
     job_posting_url: str = ""
     resume_base64: str = ""
 
@@ -47,6 +53,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
     def extract_job_details(self, crewai_trigger_payload: dict = None):
         """Step 1: Scrape the job posting URL and extract structured details."""
         if crewai_trigger_payload:
+            self.state.session_id = crewai_trigger_payload.get("session_id", "")
             self.state.job_posting_url = crewai_trigger_payload.get(
                 "job_posting_url", ""
             )
@@ -197,6 +204,7 @@ def kickoff():
     flow = JobFitAssessmentFlow()
     flow.kickoff(
         inputs={
+            "session_id": "",
             "job_posting_url": "",
             "resume_base64": "",
         }

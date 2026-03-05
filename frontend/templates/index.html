@@ -108,7 +108,15 @@
     const fileInput = document.getElementById("resume");
     const fileName = document.getElementById("file-name");
 
-    let pollInterval = null;
+    let evtSource = null;
+    let currentKickoffId = null;
+
+    // Map flow method names to DOM step element IDs
+    const STEP_MAP = {
+      extract_job_details: "step-scraping",
+      analyze_resume: "step-resume",
+      write_report: "step-report",
+    };
 
     // Show selected file name
     fileInput.addEventListener("change", () => {
@@ -128,14 +136,20 @@
     }
 
     function showError(msg) {
+      if (evtSource) { evtSource.close(); evtSource = null; }
       errorMessage.textContent = msg;
       showState(stateError);
     }
 
     function resetForm() {
-      if (pollInterval) clearInterval(pollInterval);
+      if (evtSource) { evtSource.close(); evtSource = null; }
+      currentKickoffId = null;
       form.reset();
       fileName.textContent = "Click or drag a PDF here";
+      // Reset step classes
+      document.getElementById("step-scraping").className = "step";
+      document.getElementById("step-resume").className = "step";
+      document.getElementById("step-report").className = "step";
       showState(stateForm);
     }
 
@@ -154,57 +168,90 @@
           return;
         }
 
-        const kickoffId = data.kickoff_id;
-        if (!kickoffId) {
-          showError("No kickoff ID returned. Check your API configuration.");
+        const sessionId = data.session_id;
+        currentKickoffId = data.kickoff_id;
+
+        if (!sessionId) {
+          showError("No session ID returned. Check your API configuration.");
           return;
         }
 
-        startPolling(kickoffId);
+        connectSSE(sessionId);
       } catch (err) {
         showError("Network error: " + err.message);
       }
     });
 
-    function startPolling(kickoffId) {
-      let elapsed = 0;
-      const MAX_POLL_SECONDS = 300;
+    function connectSSE(sessionId) {
+      evtSource = new EventSource(`/api/stream/${sessionId}`);
 
-      pollInterval = setInterval(async () => {
-        elapsed += 5;
+      evtSource.onmessage = (event) => {
+        const session = JSON.parse(event.data);
 
-        if (elapsed >= 10) document.getElementById("step-scraping").classList.add("done");
-        if (elapsed >= 20) document.getElementById("step-resume").classList.add("active");
-        if (elapsed >= 40) {
-          document.getElementById("step-resume").classList.add("done");
-          document.getElementById("step-report").classList.add("active");
+        // Update step indicators from real webhook data
+        updateSteps(session.steps);
+
+        // Final report arrived
+        if (session.report) {
+          evtSource.close();
+          evtSource = null;
+          reportContent.innerHTML = marked.parse(session.report);
+          showState(stateReport);
         }
 
-        if (elapsed > MAX_POLL_SECONDS) {
-          clearInterval(pollInterval);
-          showError("The assessment is taking too long. Please try again later.");
-          return;
+        // Error
+        if (session.error) {
+          showError(session.error);
         }
+      };
 
-        try {
-          const resp = await fetch(`/api/status/${kickoffId}`);
-          const data = await resp.json();
+      evtSource.onerror = () => {
+        console.warn("SSE connection lost, falling back to status polling");
+        evtSource.close();
+        evtSource = null;
+        if (currentKickoffId) {
+          fallbackStatusCheck(currentKickoffId);
+        }
+      };
+    }
+
+    function updateSteps(steps) {
+      for (const [methodName, elemId] of Object.entries(STEP_MAP)) {
+        const el = document.getElementById(elemId);
+        const info = steps[methodName];
+        if (!info) continue;
+
+        if (info.status === "in_progress") {
+          el.classList.add("active");
+          el.classList.remove("done");
+        } else if (info.status === "completed") {
+          el.classList.add("done");
+          el.classList.remove("active");
+        }
+      }
+    }
+
+    function fallbackStatusCheck(kickoffId) {
+      fetch(`/api/status/${kickoffId}`)
+        .then(r => r.json())
+        .then(data => {
           const status = (data.state || data.status || "").toUpperCase();
-
           if (status === "SUCCESS" || status === "COMPLETED") {
-            clearInterval(pollInterval);
             const result = data.result || data.output || data.raw || "";
             reportContent.innerHTML = marked.parse(result);
             showState(stateReport);
           } else if (status === "FAILED" || status === "ERROR") {
-            clearInterval(pollInterval);
-            showError(data.error || data.message || "The assessment failed. Please try again.");
+            showError(data.error || "The assessment failed. Please try again.");
+          } else {
+            // Still running — retry in 10s
+            setTimeout(() => fallbackStatusCheck(kickoffId), 10000);
           }
-        } catch (err) {
-          console.warn("Polling error:", err);
-        }
-      }, 5000);
+        })
+        .catch(err => showError("Lost connection: " + err.message));
     }
+
+    // Warm up the AMP deployment on page load
+    fetch("/api/warmup", { method: "POST" }).catch(() => {});
   </script>
 </body>
 </html>
