@@ -10,21 +10,25 @@ The system runs a CrewAI Flow with three sequential agents:
 2. **Resume Analyzer** — Reads the candidate's resume PDF using RAG (PDFSearchTool) and scores the candidate against the extracted requirements, identifying strengths and gaps.
 3. **Report Writer** — Compiles findings into a structured markdown report with fitness score, strengths, missing skills, and an overall assessment.
 
+Progress updates are delivered in real-time via webhooks and Server-Sent Events (SSE) — the flow's event listener POSTs step updates to the frontend, which pushes them to the browser as each agent starts and finishes.
+
 ## Project Structure
 
 ```
 template_job_fit_assessment/
 ├── src/template_job_fit_assessment/
-│   └── main.py              # CrewAI flow with 3 agents
+│   ├── main.py                # CrewAI flow with 3 agents
+│   └── events/
+│       └── listener.py        # WebhookEventListener (posts step updates)
 ├── frontend/
-│   ├── app.py               # Flask server (API proxy)
-│   ├── templates/index.html  # Web UI
-│   ├── static/style.css      # Styling
-│   ├── requirements.txt      # Flask dependencies
-│   ├── Procfile              # Heroku deployment
-│   └── .env                  # API credentials (not committed)
-├── pyproject.toml            # CrewAI project config
-└── .env                      # API keys (not committed)
+│   ├── app.py                 # Flask server (webhook receiver + SSE)
+│   ├── templates/index.html   # Web UI
+│   ├── static/style.css       # Styling
+│   ├── requirements.txt       # Flask dependencies
+│   ├── Procfile               # Heroku deployment
+│   └── .env                   # API credentials (not committed)
+├── pyproject.toml             # CrewAI project config
+└── .env                       # API keys (not committed)
 ```
 
 ## Prerequisites
@@ -35,26 +39,26 @@ template_job_fit_assessment/
   - `OPENAI_API_KEY` — for the LLM agents
   - `FIRECRAWL_API_KEY` — for scraping job postings
 
-## Setup
+## Local Development
 
-### CrewAI Flow (backend)
+### 1. CrewAI Flow (backend)
 
 ```bash
 # Install dependencies
 uv sync
 
 # Set API keys in .env
-OPENAI_API_KEY=sk-...
-FIRECRAWL_API_KEY=fc-...
-```
+cp .env.example .env
+# Edit .env:
+#   OPENAI_API_KEY=sk-...
+#   FIRECRAWL_API_KEY=fc-...
+#   WEBHOOK_URL=http://localhost:5001/webhook/messages
 
-The flow is deployed to CrewAI AMP and triggered via its API. To run locally:
-
-```bash
+# Run locally
 uv run kickoff
 ```
 
-### Flask Frontend
+### 2. Flask Frontend
 
 ```bash
 cd frontend
@@ -63,8 +67,10 @@ cd frontend
 pip install -r requirements.txt
 
 # Configure .env with your AMP credentials
-CREWAI_API_URL=https://your-deployment.crewai.com
-CREWAI_BEARER_TOKEN=your-token
+cp .env.example .env
+# Edit .env:
+#   CREWAI_API_URL=https://your-deployment.crewai.com
+#   CREWAI_BEARER_TOKEN=your-token
 
 # Run the server
 python app.py
@@ -72,25 +78,59 @@ python app.py
 
 Open `http://localhost:5001`.
 
-## API Flow
+## API Endpoints
 
-The frontend communicates with CrewAI AMP through two proxy endpoints:
+### Browser-facing
 
-1. **`POST /api/kickoff`** — Receives the job URL and resume PDF, base64-encodes the PDF, and forwards to CrewAI AMP's `/kickoff` endpoint. Returns a `kickoff_id`.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/warmup` | POST | Pings AMP `/inputs` to warm up the deployment |
+| `/api/kickoff` | POST | Receives job URL + resume PDF, forwards to AMP, returns `session_id` and `kickoff_id` |
+| `/api/stream/<session_id>` | GET | SSE stream — pushes real-time step updates and final report |
+| `/api/status/<kickoff_id>` | GET | Fallback polling endpoint — proxies to AMP status API |
 
-2. **`GET /api/status/<kickoff_id>`** — Polls CrewAI AMP's `/status` endpoint until the flow completes, then returns the markdown report.
+### Webhook (called by the flow's event listener)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/webhook/messages` | POST | Receives step updates and final report from `WebhookEventListener` |
 
 ## Deployment
 
 ### CrewAI AMP (backend)
 
 ```bash
-crewai deploy
+crewai deploy create
 ```
+
+Set these environment variables in AMP:
+- `OPENAI_API_KEY`
+- `FIRECRAWL_API_KEY`
+- `WEBHOOK_URL` — your Heroku app's webhook URL (see below)
 
 ### Heroku (frontend)
 
-The `frontend/` directory includes a `Procfile` for Heroku. Set `CREWAI_API_URL` and `CREWAI_BEARER_TOKEN` as config vars.
+```bash
+# From the project root (template_job_fit_assessment/)
+git subtree push --prefix frontend heroku main
+```
+
+Set these config vars on Heroku:
+
+```bash
+heroku config:set CREWAI_API_URL=https://your-deployment.crewai.com
+heroku config:set CREWAI_BEARER_TOKEN=your-token
+```
+
+Your webhook URL is `https://<your-app>.herokuapp.com/webhook/messages` — set this as `WEBHOOK_URL` in AMP.
+
+### Connecting the two
+
+Once both are deployed:
+
+1. Copy your Heroku app URL (e.g., `https://my-app.herokuapp.com`)
+2. In AMP, set `WEBHOOK_URL=https://my-app.herokuapp.com/webhook/messages`
+3. Redeploy the flow on AMP so it picks up the new env var
 
 ## Report Output
 
