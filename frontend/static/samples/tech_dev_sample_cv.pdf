@@ -12,20 +12,72 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
 endobj
 5 0 obj
-<< /Length 652 >>
+<< /Length 1759 >>
 stream
 BT
+/F1 19 Tf
+1 0 0 1 50 760 Tm
+(Avery Chen) Tj
 /F1 12 Tf
-50 780 Td
-(Avery Chen - Senior Software Engineer \(Sample CV\)) Tj
-0 -16 Td (Location: Austin, TX | Email: avery.chen@example.com) Tj
-0 -16 Td (Summary: Full-stack engineer with 8 years in SaaS products.) Tj
-0 -16 Td (Skills: Python, TypeScript, React, FastAPI, PostgreSQL, AWS.) Tj
-0 -16 Td (Experience: Led migration from monolith to microservices.) Tj
-0 -16 Td (Experience: Reduced API latency by 38 percent through caching.) Tj
-0 -16 Td (Education: B.S. Computer Science, University of Texas.) Tj
-0 -16 Td (Certifications: AWS Solutions Architect Associate.) Tj
-0 -16 Td (Note: This is a fictional resume for demo purposes only.) Tj
+1 0 0 1 50 736 Tm
+(Senior Software Engineer) Tj
+/F1 10 Tf
+1 0 0 1 50 718 Tm
+(Austin, TX | avery.chen@example.com | linkedin.com/in/averychen) Tj
+/F1 10 Tf
+1 0 0 1 50 694 Tm
+(PROFESSIONAL SUMMARY) Tj
+/F1 11 Tf
+1 0 0 1 50 680 Tm
+(Full-stack engineer with 8 years building SaaS platforms and developer tooling.) Tj
+/F1 11 Tf
+1 0 0 1 50 665 Tm
+(Known for scaling APIs, improving reliability, and mentoring growing engineering teams.) Tj
+/F1 10 Tf
+1 0 0 1 50 644 Tm
+(CORE SKILLS) Tj
+/F1 11 Tf
+1 0 0 1 50 630 Tm
+(Python, TypeScript, React, FastAPI, PostgreSQL, AWS, Docker, CI/CD) Tj
+/F1 10 Tf
+1 0 0 1 50 608 Tm
+(EXPERIENCE) Tj
+/F1 11 Tf
+1 0 0 1 50 594 Tm
+(Senior Software Engineer | CloudLeaf | 2022 - Present) Tj
+/F1 10 Tf
+1 0 0 1 60 580 Tm
+(- Led migration from monolith to services, reducing deployment rollback incidents by 43%.) Tj
+/F1 10 Tf
+1 0 0 1 60 567 Tm
+(- Improved API response time by 38% through query optimization and layered caching.) Tj
+/F1 10 Tf
+1 0 0 1 60 554 Tm
+(- Partnered with product and design to ship analytics features used by 12k+ users.) Tj
+/F1 11 Tf
+1 0 0 1 50 537 Tm
+(Software Engineer | ByteForge | 2018 - 2022) Tj
+/F1 10 Tf
+1 0 0 1 60 523 Tm
+(- Built customer onboarding workflows that increased activation by 22%.) Tj
+/F1 10 Tf
+1 0 0 1 60 510 Tm
+(- Implemented automated test strategy that cut production defects release-over-release.) Tj
+/F1 10 Tf
+1 0 0 1 50 493 Tm
+(EDUCATION) Tj
+/F1 11 Tf
+1 0 0 1 50 479 Tm
+(B.S. Computer Science - University of Texas at Austin) Tj
+/F1 10 Tf
+1 0 0 1 50 460 Tm
+(ADDITIONAL) Tj
+/F1 11 Tf
+1 0 0 1 50 446 Tm
+(AWS Solutions Architect Associate) Tj
+/F1 9 Tf
+1 0 0 1 50 423 Tm
+(This is a fictional resume created for demo purposes only.) Tj
 ET
 endstream
 endobj
@@ -40,5 +92,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1014
+2122
 %%EOF

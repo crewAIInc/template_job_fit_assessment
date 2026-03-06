@@ -157,6 +157,34 @@ form label {
   color: #333;
 }
 
+.job-url-helper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.job-url-helper-text {
+  font-size: 0.8rem;
+  color: #777;
+}
+
+.job-url-helper-link {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #e05a47;
+  text-decoration: none;
+  border: 1px solid #e9b1aa;
+  border-radius: 6px;
+  padding: 4px 10px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.job-url-helper-link:hover {
+  background: #fef5f4;
+  border-color: #e05a47;
+}
+
 form input[type="url"] {
   width: 100%;
   padding: 11px 14px;
@@ -560,6 +588,12 @@ body.modal-open {
 
   .content {
     padding: 32px 24px;
+  }
+
+  .job-url-helper {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 
   .sample-option {
