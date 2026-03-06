@@ -30,10 +30,16 @@
         structured fit assessment with strengths, gaps, and an overall score.
       </li>
     </ol>
+
+    <div class="sidebar-buttons">
+      <a href="https://app.crewai.com/" target="_blank" class="btn-sidebar btn-primary">Try it on CrewAI</a>
+      <a href="https://github.com/crewAIInc/template_job_fit_assessment" target="_blank" class="btn-sidebar btn-outline">View on GitHub</a>
+    </div>
   </aside>
 
   <!-- Main content -->
   <main class="content">
+    <div class="content-inner">
 
     <!-- STATE 1: Form -->
     <section id="state-form">
@@ -58,9 +64,17 @@
         <label for="resume">Resume (PDF) *</label>
         <div class="file-upload" id="file-upload-area">
           <input type="file" id="resume" name="resume" accept=".pdf" required />
-          <p class="file-upload-text">
-            <span id="file-name">Click or drag a PDF here</span>
-          </p>
+          <div class="file-upload-default" id="file-default">
+            <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p class="file-upload-text">Click or drag a PDF here</p>
+          </div>
+          <div class="file-upload-attached hidden" id="file-attached">
+            <svg class="file-pdf-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <div class="file-attached-info">
+              <span class="file-attached-name" id="file-name"></span>
+              <span class="file-attached-badge">PDF attached</span>
+            </div>
+          </div>
         </div>
 
         <button type="submit" class="btn-submit">Assess Candidate</button>
@@ -95,6 +109,7 @@
         <button class="btn-submit btn-new" onclick="resetForm()">Try Again</button>
       </div>
     </section>
+    </div>
   </main>
 
   <script>
@@ -107,6 +122,9 @@
     const errorMessage = document.getElementById("error-message");
     const fileInput = document.getElementById("resume");
     const fileName = document.getElementById("file-name");
+    const fileUploadArea = document.getElementById("file-upload-area");
+    const fileDefault = document.getElementById("file-default");
+    const fileAttached = document.getElementById("file-attached");
 
     let evtSource = null;
     let currentKickoffId = null;
@@ -118,12 +136,17 @@
       write_report: "step-report",
     };
 
-    // Show selected file name
+    // Show selected file with attachment feedback
     fileInput.addEventListener("change", () => {
       if (fileInput.files.length > 0) {
         fileName.textContent = fileInput.files[0].name;
+        fileUploadArea.classList.add("file-attached-state");
+        fileDefault.classList.add("hidden");
+        fileAttached.classList.remove("hidden");
       } else {
-        fileName.textContent = "Click or drag a PDF here";
+        fileUploadArea.classList.remove("file-attached-state");
+        fileDefault.classList.remove("hidden");
+        fileAttached.classList.add("hidden");
       }
     });
 
@@ -145,7 +168,9 @@
       if (evtSource) { evtSource.close(); evtSource = null; }
       currentKickoffId = null;
       form.reset();
-      fileName.textContent = "Click or drag a PDF here";
+      fileUploadArea.classList.remove("file-attached-state");
+      fileDefault.classList.remove("hidden");
+      fileAttached.classList.add("hidden");
       // Reset step classes
       document.getElementById("step-scraping").className = "step";
       document.getElementById("step-resume").className = "step";
