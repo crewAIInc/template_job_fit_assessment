@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import uuid
+from pathlib import Path
 from queue import Empty, Queue
 from threading import Lock
 
@@ -17,6 +18,13 @@ app.logger.setLevel(logging.INFO)
 
 CREWAI_API_URL = os.getenv("CREWAI_API_URL", "").rstrip("/")
 CREWAI_BEARER_TOKEN = os.getenv("CREWAI_BEARER_TOKEN", "")
+BASE_DIR = Path(__file__).resolve().parent
+
+SAMPLE_RESUMES = {
+    "tech_dev": BASE_DIR / "static" / "samples" / "tech_dev_sample_cv.pdf",
+    "business": BASE_DIR / "static" / "samples" / "business_sample_cv.pdf",
+    "marketing": BASE_DIR / "static" / "samples" / "marketing_sample_cv.pdf",
+}
 
 # In-memory session state — keyed by session_id
 sessions: dict[str, dict] = {}
@@ -100,13 +108,39 @@ def api_warmup():
 def api_kickoff():
     job_url = request.form.get("job_posting_url", "")
     resume_file = request.files.get("resume")
+    sample_resume_id = request.form.get("sample_resume_id", "").strip()
 
-    if not job_url or not resume_file:
+    has_file = bool(resume_file and resume_file.filename)
+    has_sample = bool(sample_resume_id)
+
+    if not job_url:
+        return jsonify({"error": "Job posting URL is required."}), 400
+
+    if has_file == has_sample:
         return jsonify(
-            {"error": "Both job posting URL and resume PDF are required."}
+            {
+                "error": (
+                    "Provide exactly one resume source: upload a resume PDF "
+                    "or choose a sample CV."
+                )
+            }
         ), 400
 
-    resume_b64 = base64.b64encode(resume_file.read()).decode("utf-8")
+    if has_file:
+        resume_bytes = resume_file.read()
+        if not resume_bytes:
+            return jsonify({"error": "Uploaded resume file is empty."}), 400
+    else:
+        sample_path = SAMPLE_RESUMES.get(sample_resume_id)
+        if not sample_path:
+            return jsonify({"error": "Invalid sample CV selection."}), 400
+        try:
+            resume_bytes = sample_path.read_bytes()
+        except OSError:
+            app.logger.exception("Failed to read sample resume: %s", sample_path)
+            return jsonify({"error": "Sample CV is unavailable."}), 500
+
+    resume_b64 = base64.b64encode(resume_bytes).decode("utf-8")
     session_id = uuid.uuid4().hex
 
     # Pre-create the session so SSE can connect immediately

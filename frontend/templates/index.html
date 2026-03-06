@@ -22,8 +22,8 @@
         posting and extracts required skills.
       </li>
       <li>
-        <strong>Upload a resume</strong> &mdash; A second agent reads the PDF
-        and scores the candidate against the requirements.
+        <strong>Provide a resume</strong> &mdash; Upload a PDF or use a sample
+        CV, then a second agent scores the candidate against the requirements.
       </li>
       <li>
         <strong>Get your report</strong> &mdash; A third agent compiles a
@@ -45,9 +45,10 @@
     <section id="state-form">
       <h1>Job Fit Assessment</h1>
       <p class="intro">
-        Paste the URL to a job posting and upload the candidate's resume as
-        a PDF. Our AI agents will analyze the posting, evaluate the resume,
-        and produce a detailed fit report. The assessment typically takes
+        Paste the URL to a job posting and provide a candidate resume by
+        uploading a PDF or selecting a sample CV. Our AI agents will analyze
+        the posting, evaluate the resume, and produce a detailed fit report.
+        The assessment typically takes
         1&ndash;3 minutes.
       </p>
 
@@ -61,9 +62,9 @@
           required
         />
 
-        <label for="resume">Resume (PDF) *</label>
+        <label for="resume">Resume Source *</label>
         <div class="file-upload" id="file-upload-area">
-          <input type="file" id="resume" name="resume" accept=".pdf" required />
+          <input type="file" id="resume" name="resume" accept=".pdf" />
           <div class="file-upload-default" id="file-default">
             <svg class="file-upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             <p class="file-upload-text">Click or drag a PDF here</p>
@@ -76,6 +77,44 @@
             </div>
           </div>
         </div>
+        <p class="source-or-divider">or choose a demo sample CV</p>
+
+        <div class="sample-options" id="sample-options">
+          <label class="sample-option" for="sample-tech">
+            <div class="sample-main">
+              <input type="radio" id="sample-tech" name="sample_resume_id" value="tech_dev" />
+              <div class="sample-info">
+                <span class="sample-title">Tech / Developer</span>
+                <span class="sample-subtitle">Software engineering profile</span>
+              </div>
+            </div>
+            <button type="button" class="btn-sample-view" data-sample-url="/static/samples/tech_dev_sample_cv.pdf" data-sample-title="Tech / Developer CV">View</button>
+          </label>
+
+          <label class="sample-option" for="sample-business">
+            <div class="sample-main">
+              <input type="radio" id="sample-business" name="sample_resume_id" value="business" />
+              <div class="sample-info">
+                <span class="sample-title">Business</span>
+                <span class="sample-subtitle">Operations and strategy profile</span>
+              </div>
+            </div>
+            <button type="button" class="btn-sample-view" data-sample-url="/static/samples/business_sample_cv.pdf" data-sample-title="Business CV">View</button>
+          </label>
+
+          <label class="sample-option" for="sample-marketing">
+            <div class="sample-main">
+              <input type="radio" id="sample-marketing" name="sample_resume_id" value="marketing" />
+              <div class="sample-info">
+                <span class="sample-title">Marketing</span>
+                <span class="sample-subtitle">Growth and campaign profile</span>
+              </div>
+            </div>
+            <button type="button" class="btn-sample-view" data-sample-url="/static/samples/marketing_sample_cv.pdf" data-sample-title="Marketing CV">View</button>
+          </label>
+        </div>
+
+        <p id="form-error" class="form-error hidden"></p>
 
         <button type="submit" class="btn-submit">Assess Candidate</button>
       </form>
@@ -112,6 +151,16 @@
     </div>
   </main>
 
+  <div id="sample-modal" class="sample-modal hidden" role="dialog" aria-modal="true" aria-labelledby="sample-modal-title">
+    <div class="sample-modal-content">
+      <div class="sample-modal-header">
+        <h2 id="sample-modal-title">Sample CV Preview</h2>
+        <button type="button" id="sample-modal-close" class="sample-modal-close" aria-label="Close preview">Close</button>
+      </div>
+      <iframe id="sample-modal-frame" class="sample-modal-frame" title="Sample CV preview"></iframe>
+    </div>
+  </div>
+
   <script>
     const form = document.getElementById("assessment-form");
     const stateForm = document.getElementById("state-form");
@@ -125,6 +174,14 @@
     const fileUploadArea = document.getElementById("file-upload-area");
     const fileDefault = document.getElementById("file-default");
     const fileAttached = document.getElementById("file-attached");
+    const sampleOptions = document.getElementById("sample-options");
+    const sampleInputs = document.querySelectorAll('input[name="sample_resume_id"]');
+    const sampleViewButtons = document.querySelectorAll(".btn-sample-view");
+    const formError = document.getElementById("form-error");
+    const sampleModal = document.getElementById("sample-modal");
+    const sampleModalTitle = document.getElementById("sample-modal-title");
+    const sampleModalFrame = document.getElementById("sample-modal-frame");
+    const sampleModalClose = document.getElementById("sample-modal-close");
 
     let evtSource = null;
     let currentKickoffId = null;
@@ -136,8 +193,7 @@
       write_report: "step-report",
     };
 
-    // Show selected file with attachment feedback
-    fileInput.addEventListener("change", () => {
+    function updateFileUI() {
       if (fileInput.files.length > 0) {
         fileName.textContent = fileInput.files[0].name;
         fileUploadArea.classList.add("file-attached-state");
@@ -147,6 +203,86 @@
         fileUploadArea.classList.remove("file-attached-state");
         fileDefault.classList.remove("hidden");
         fileAttached.classList.add("hidden");
+      }
+    }
+
+    function updateSampleUI() {
+      const selectedSample = document.querySelector('input[name="sample_resume_id"]:checked');
+      const optionCards = sampleOptions.querySelectorAll(".sample-option");
+      optionCards.forEach((card) => card.classList.remove("selected"));
+
+      if (selectedSample) {
+        selectedSample.closest(".sample-option").classList.add("selected");
+      }
+    }
+
+    function clearFormError() {
+      formError.classList.add("hidden");
+      formError.textContent = "";
+    }
+
+    function setFormError(msg) {
+      formError.textContent = msg;
+      formError.classList.remove("hidden");
+    }
+
+    function clearSampleSelection() {
+      sampleInputs.forEach((input) => {
+        input.checked = false;
+      });
+      updateSampleUI();
+    }
+
+    function openSampleModal(url, title) {
+      sampleModalTitle.textContent = title;
+      sampleModalFrame.src = url;
+      sampleModal.classList.remove("hidden");
+      document.body.classList.add("modal-open");
+    }
+
+    function closeSampleModal() {
+      sampleModal.classList.add("hidden");
+      sampleModalFrame.src = "";
+      document.body.classList.remove("modal-open");
+    }
+
+    fileInput.addEventListener("change", () => {
+      if (fileInput.files.length > 0) {
+        clearSampleSelection();
+      }
+      updateFileUI();
+      clearFormError();
+    });
+
+    sampleInputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        if (input.checked) {
+          fileInput.value = "";
+          updateFileUI();
+        }
+        updateSampleUI();
+        clearFormError();
+      });
+    });
+
+    sampleViewButtons.forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openSampleModal(button.dataset.sampleUrl, button.dataset.sampleTitle);
+      });
+    });
+
+    sampleModalClose.addEventListener("click", closeSampleModal);
+    sampleModal.addEventListener("click", (event) => {
+      if (event.target === sampleModal) {
+        closeSampleModal();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !sampleModal.classList.contains("hidden")) {
+        closeSampleModal();
       }
     });
 
@@ -168,9 +304,10 @@
       if (evtSource) { evtSource.close(); evtSource = null; }
       currentKickoffId = null;
       form.reset();
-      fileUploadArea.classList.remove("file-attached-state");
-      fileDefault.classList.remove("hidden");
-      fileAttached.classList.add("hidden");
+      updateFileUI();
+      updateSampleUI();
+      clearFormError();
+      closeSampleModal();
       // Reset step classes
       document.getElementById("step-scraping").className = "step";
       document.getElementById("step-resume").className = "step";
@@ -180,6 +317,21 @@
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
+      clearFormError();
+
+      const hasFile = fileInput.files.length > 0;
+      const selectedSample = document.querySelector('input[name="sample_resume_id"]:checked');
+      const hasSample = Boolean(selectedSample);
+
+      if (!hasFile && !hasSample) {
+        setFormError("Select a sample CV or upload a PDF resume before submitting.");
+        return;
+      }
+      if (hasFile && hasSample) {
+        setFormError("Choose only one resume source: upload or sample.");
+        return;
+      }
+
       showState(stateProcessing);
 
       const formData = new FormData(form);
@@ -277,6 +429,10 @@
 
     // Warm up the AMP deployment on page load
     fetch("/api/warmup", { method: "POST" }).catch(() => {});
+
+    // Initialize default UI state
+    updateFileUI();
+    updateSampleUI();
   </script>
 </body>
 </html>

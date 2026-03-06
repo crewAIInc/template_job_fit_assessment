@@ -20,6 +20,7 @@ crews/
 # Project outputs
 job_fit_report_*.md
 *.pdf
+!frontend/static/samples/*.pdf
 
 # CrewAI reference docs
 CLAUDE.md
