@@ -112,6 +112,7 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
                 "information — if a skill is not explicitly present in the resume, it is absent."
             ),
             llm="openai/gpt-5-mini",
+            inject_date=True,
             verbose=True,
         )
 
@@ -125,6 +126,15 @@ class JobFitAssessmentFlow(Flow[JobFitState]):
             "1. Extract the candidate's full name\n"
             "2. Identify which required skills the candidate clearly demonstrates (strengths)\n"
             "3. Identify which required skills the candidate does not demonstrate (missing skills)\n"
+            "   IMPORTANT — Years-of-experience requirements:\n"
+            "   When a required skill specifies years of experience (e.g. '5+ years in Python'),\n"
+            "   do NOT simply check whether the resume states a total. Instead:\n"
+            "   a) Sum the durations of all work-history entries where that skill was used.\n"
+            "      Treat 'present', 'current', or 'now' as today's date.\n"
+            "   b) Apply a ~10 % tolerance: if the requirement is 5 years and the candidate\n"
+            "      shows ~4.5 years of relevant experience, count it as met.\n"
+            "   c) Only flag years-of-experience as a gap when the candidate clearly falls\n"
+            "      significantly short, or has no relevant experience at all.\n"
             "4. Calculate a fitness score from 0 to 100 based on the proportion of required "
             "skills the candidate meets, weighted by apparent importance. "
             "Use (matched_skills / total_required_skills) * 100 as a guide.\n\n"
