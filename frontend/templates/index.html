@@ -11,6 +11,14 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
+  <!-- Warmup overlay -->
+  <div id="warmup-overlay" class="warmup-overlay">
+    <div class="warmup-content">
+      <img class="warmup-logo" src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/crewai-color.png" alt="CrewAI" />
+      <p class="warmup-message">Waking up the agents...</p>
+    </div>
+  </div>
+
   <!-- Sidebar -->
   <aside class="sidebar">
     <img class="sidebar-logo" src="https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/dark/crewai-brand-color.png" alt="CrewAI" />
@@ -441,8 +449,15 @@
         .catch(err => showError("Lost connection: " + err.message));
     }
 
-    // Warm up the AMP deployment on page load
-    fetch("/api/warmup", { method: "POST" }).catch(() => {});
+    // Warm up the AMP deployment on page load and dismiss overlay when done
+    const warmupOverlay = document.getElementById("warmup-overlay");
+    const dismissWarmup = () => {
+      if (!warmupOverlay || warmupOverlay.classList.contains("fade-out")) return;
+      warmupOverlay.classList.add("fade-out");
+      warmupOverlay.addEventListener("transitionend", () => warmupOverlay.remove(), { once: true });
+    };
+    const warmupPromise = fetch("/api/warmup", { method: "POST" }).then(dismissWarmup).catch(dismissWarmup);
+    setTimeout(dismissWarmup, 15000);
 
     // Initialize default UI state
     updateFileUI();
